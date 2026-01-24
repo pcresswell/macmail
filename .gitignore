@@ -1,0 +1,27 @@
+# Binaries (root only)
+/macmail
+/mm
+
+# Claude/Playwright
+.claude/
+.playwright-mcp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+coverage.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Go
+go.sum
