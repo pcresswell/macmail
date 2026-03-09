@@ -53,6 +53,14 @@ func setupTestDB(t *testing.T) *sql.DB {
 			sender INTEGER NOT NULL
 		);
 
+		CREATE TABLE recipients (
+			ROWID INTEGER PRIMARY KEY,
+			message INTEGER NOT NULL,
+			address INTEGER NOT NULL,
+			type INTEGER,
+			position INTEGER
+		);
+
 		CREATE TABLE messages (
 			ROWID INTEGER PRIMARY KEY,
 			message_id INTEGER,
@@ -93,6 +101,12 @@ func setupTestDB(t *testing.T) *sql.DB {
 			(1, 1),
 			(2, 2),
 			(3, 3);
+
+		INSERT INTO recipients (ROWID, message, address, type, position) VALUES
+			(1, 879823, 1, 0, 0),
+			(2, 879824, 2, 0, 0),
+			(3, 879825, 3, 0, 0),
+			(4, 879826, 1, 0, 0);
 
 		INSERT INTO messages (ROWID, message_id, subject, sender, date_received, mailbox, read) VALUES
 			(879823, 1001, 1, 1, 1706100000, 1, 0),
@@ -962,6 +976,7 @@ func TestRunListUnknownSender(t *testing.T) {
 		CREATE TABLE addresses (ROWID INTEGER PRIMARY KEY, address TEXT, comment TEXT);
 		CREATE TABLE senders (ROWID INTEGER PRIMARY KEY);
 		CREATE TABLE sender_addresses (address INTEGER, sender INTEGER);
+		CREATE TABLE recipients (ROWID INTEGER PRIMARY KEY, message INTEGER, address INTEGER, type INTEGER, position INTEGER);
 		CREATE TABLE messages (ROWID INTEGER PRIMARY KEY, subject INTEGER, sender INTEGER, date_received INTEGER, mailbox INTEGER, read INTEGER);
 
 		INSERT INTO subjects VALUES (1, 'Test Subject');
@@ -1285,12 +1300,14 @@ func TestRunListSenderFallbackToEmail(t *testing.T) {
 		CREATE TABLE addresses (ROWID INTEGER PRIMARY KEY, address TEXT, comment TEXT);
 		CREATE TABLE senders (ROWID INTEGER PRIMARY KEY);
 		CREATE TABLE sender_addresses (address INTEGER, sender INTEGER);
+		CREATE TABLE recipients (ROWID INTEGER PRIMARY KEY, message INTEGER, address INTEGER, type INTEGER, position INTEGER);
 		CREATE TABLE messages (ROWID INTEGER PRIMARY KEY, subject INTEGER, sender INTEGER, date_received INTEGER, mailbox INTEGER, read INTEGER);
 
 		INSERT INTO subjects VALUES (1, 'Test');
 		INSERT INTO addresses VALUES (1, 'test@example.com', '');
 		INSERT INTO senders VALUES (1);
 		INSERT INTO sender_addresses VALUES (1, 1);
+		INSERT INTO recipients VALUES (1, 1, 1, 0, 0);
 		INSERT INTO messages VALUES (1, 1, 1, 1706100000, 1, 0);
 	`)
 	if err != nil {
@@ -1773,6 +1790,7 @@ func TestRunReadSenderNoName(t *testing.T) {
 		CREATE TABLE addresses (ROWID INTEGER PRIMARY KEY, address TEXT, comment TEXT);
 		CREATE TABLE senders (ROWID INTEGER PRIMARY KEY);
 		CREATE TABLE sender_addresses (address INTEGER, sender INTEGER);
+		CREATE TABLE recipients (ROWID INTEGER PRIMARY KEY, message INTEGER, address INTEGER, type INTEGER, position INTEGER);
 		CREATE TABLE mailboxes (ROWID INTEGER PRIMARY KEY, url TEXT);
 		CREATE TABLE messages (ROWID INTEGER PRIMARY KEY, subject INTEGER, sender INTEGER, date_received INTEGER, mailbox INTEGER, read INTEGER);
 
@@ -1780,6 +1798,7 @@ func TestRunReadSenderNoName(t *testing.T) {
 		INSERT INTO addresses VALUES (1, 'test@example.com', '');
 		INSERT INTO senders VALUES (1);
 		INSERT INTO sender_addresses VALUES (1, 1);
+		INSERT INTO recipients VALUES (1, 879823, 1, 0, 0);
 		INSERT INTO mailboxes VALUES (1, 'ews://UUID/Inbox');
 		INSERT INTO messages VALUES (879823, 1, 1, 1706100000, 1, 0);
 	`)
@@ -1805,3 +1824,4 @@ func TestRunReadSenderNoName(t *testing.T) {
 		t.Error("Output should show email address when name is empty")
 	}
 }
+
