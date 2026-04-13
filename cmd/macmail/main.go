@@ -779,7 +779,12 @@ func (a *App) getEmlxPath(rowid int, mailboxURL string) string {
 	d3 := string(rowidStr[0]) // first digit
 
 	// Find the mailbox directory
-	mailboxDir := filepath.Join(a.MailDir, accountUUID, mailboxName+".mbox")
+	// Apple Mail appends .mbox to each path segment, e.g. [Gmail]/All Mail -> [Gmail].mbox/All Mail.mbox
+	segments := strings.Split(mailboxName, "/")
+	for i := range segments {
+		segments[i] = segments[i] + ".mbox"
+	}
+	mailboxDir := filepath.Join(a.MailDir, accountUUID, filepath.Join(segments...))
 
 	entries, err := os.ReadDir(mailboxDir)
 	if err != nil {
