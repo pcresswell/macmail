@@ -1004,6 +1004,120 @@ func TestRunListUnknownSender(t *testing.T) {
 	}
 }
 
+// TestFromFieldUsesSenderNotRecipient is a regression test for the macmail
+// sender-mislabeling bug (silas-bexbw / silas-wv8t7 / compound-review proposal
+// 20260624-6). Root cause: RunList/RunUnread/RunSearch/RunRead/RunAttachments
+// all populated the From column by joining `recipients` filtered to
+// type=0/position=0 (the primary "To" recipient) instead of following
+// `messages.sender` to `addresses`. On any inbox message -- the account owner
+// is always a To recipient of their own inbox -- this showed the recipient
+// (frequently the account owner) as the sender instead of the real sender.
+//
+// Real-world repro: an email from ahmad@clinicline.ca, addressed to
+// pcresswell@gmail.com, was displayed by macmail with From "Peter Cresswell"
+// (the recipient) instead of "Ahmad Shahzad" (the actual sender). Confirmed
+// against the live ~/Library/Mail/V10/MailData/Envelope Index schema, where
+// `messages.sender` is a direct FK into `addresses`, while `recipients` only
+// ever stores message participants in the To/Cc/Bcc sense, never From.
+//
+// This test's fixture deliberately makes recipient != sender (address 1 =
+// real sender Ahmad, address 2 = recipient/account-owner Peter) to catch the
+// bug that setupTestDB's shared fixture masked by coincidentally making the
+// type=0/position=0 recipient equal to the sender for every row.
+func TestFromFieldUsesSenderNotRecipient(t *testing.T) {
+	// newSenderVsRecipientDB returns a fresh in-memory DB per subtest (each
+	// Run* method closes its db via defer, so subtests must not share one).
+	//
+	// Address 1 = the real sender (an external contact, Ahmad).
+	// Address 2 = the account owner (Peter) -- the primary To recipient on
+	// his own inbox message, but NOT the sender.
+	newSenderVsRecipientDB := func(t *testing.T) *sql.DB {
+		t.Helper()
+		db, err := sql.Open("sqlite3", ":memory:")
+		if err != nil {
+			t.Fatalf("failed to open db: %v", err)
+		}
+		t.Cleanup(func() { db.Close() })
+
+		schema := `
+			CREATE TABLE mailboxes (ROWID INTEGER PRIMARY KEY, url TEXT NOT NULL, total_count INTEGER DEFAULT 0, unread_count INTEGER DEFAULT 0);
+			CREATE TABLE subjects (ROWID INTEGER PRIMARY KEY, subject TEXT NOT NULL);
+			CREATE TABLE addresses (ROWID INTEGER PRIMARY KEY, address TEXT NOT NULL, comment TEXT DEFAULT '');
+			CREATE TABLE recipients (ROWID INTEGER PRIMARY KEY, message INTEGER NOT NULL, address INTEGER NOT NULL, type INTEGER, position INTEGER);
+			CREATE TABLE messages (ROWID INTEGER PRIMARY KEY, message_id INTEGER, subject INTEGER, sender INTEGER, date_received INTEGER, mailbox INTEGER, read INTEGER DEFAULT 0);
+		`
+		if _, err := db.Exec(schema); err != nil {
+			t.Fatalf("failed to create schema: %v", err)
+		}
+
+		data := `
+			INSERT INTO mailboxes (ROWID, url) VALUES (1, 'ews://TEST-UUID/Inbox');
+			INSERT INTO subjects (ROWID, subject) VALUES (1, 'CL-Technology Touchpoint');
+			INSERT INTO addresses (ROWID, address, comment) VALUES
+				(1, 'ahmad@clinicline.ca', 'Ahmad Shahzad'),
+				(2, 'pcresswell@gmail.com', 'Peter Cresswell');
+			INSERT INTO recipients (ROWID, message, address, type, position) VALUES
+				(1, 500, 2, 0, 0);
+			INSERT INTO messages (ROWID, message_id, subject, sender, date_received, mailbox, read) VALUES
+				(500, 9001, 1, 1, 1706100000, 1, 0);
+		`
+		if _, err := db.Exec(data); err != nil {
+			t.Fatalf("failed to insert data: %v", err)
+		}
+		return db
+	}
+
+	assertShowsSenderNotRecipient := func(t *testing.T, result string) {
+		t.Helper()
+		if !strings.Contains(result, "Ahmad Shahzad") {
+			t.Errorf("From field should show the actual sender Ahmad Shahzad, got: %s", result)
+		}
+		if strings.Contains(result, "Peter Cresswell") {
+			t.Errorf("From field should NOT show the recipient Peter Cresswell (the mislabeling bug), got: %s", result)
+		}
+	}
+
+	t.Run("RunList", func(t *testing.T) {
+		app, output := newTestApp(t, newSenderVsRecipientDB(t))
+		if err := app.RunList(10, 0, false); err != nil {
+			t.Fatalf("RunList() error = %v", err)
+		}
+		assertShowsSenderNotRecipient(t, output.String())
+	})
+
+	t.Run("RunUnread", func(t *testing.T) {
+		app, output := newTestApp(t, newSenderVsRecipientDB(t))
+		if err := app.RunUnread(10); err != nil {
+			t.Fatalf("RunUnread() error = %v", err)
+		}
+		assertShowsSenderNotRecipient(t, output.String())
+	})
+
+	t.Run("RunSearch", func(t *testing.T) {
+		app, output := newTestApp(t, newSenderVsRecipientDB(t))
+		if err := app.RunSearch("Touchpoint", 10); err != nil {
+			t.Fatalf("RunSearch() error = %v", err)
+		}
+		assertShowsSenderNotRecipient(t, output.String())
+	})
+
+	t.Run("RunRead", func(t *testing.T) {
+		app, output := newTestApp(t, newSenderVsRecipientDB(t))
+		if err := app.RunRead(500); err != nil {
+			t.Fatalf("RunRead() error = %v", err)
+		}
+		assertShowsSenderNotRecipient(t, output.String())
+	})
+
+	t.Run("RunAttachments", func(t *testing.T) {
+		app, output := newTestApp(t, newSenderVsRecipientDB(t))
+		if err := app.RunAttachments(500, ""); err != nil {
+			t.Fatalf("RunAttachments() error = %v", err)
+		}
+		assertShowsSenderNotRecipient(t, output.String())
+	})
+}
+
 func TestExtractPlainTextBodyEmpty(t *testing.T) {
 	result := extractPlainTextBody("")
 	if result != "" {

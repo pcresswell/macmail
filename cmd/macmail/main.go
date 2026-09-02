@@ -239,8 +239,7 @@ func (a *App) RunList(limit, mailboxID int, unreadOnly bool) error {
 			m.read
 		FROM messages m
 		LEFT JOIN subjects s ON m.subject = s.ROWID
-		LEFT JOIN recipients r ON r.message = m.ROWID AND r.type = 0 AND r.position = 0
-		LEFT JOIN addresses a ON r.address = a.ROWID
+		LEFT JOIN addresses a ON m.sender = a.ROWID
 		WHERE 1=1
 	`
 	args := []interface{}{}
@@ -316,8 +315,7 @@ func (a *App) RunUnread(limit int) error {
 			COALESCE(s.subject, '(no subject)') as subject
 		FROM messages m
 		LEFT JOIN subjects s ON m.subject = s.ROWID
-		LEFT JOIN recipients r ON r.message = m.ROWID AND r.type = 0 AND r.position = 0
-		LEFT JOIN addresses a ON r.address = a.ROWID
+		LEFT JOIN addresses a ON m.sender = a.ROWID
 		WHERE m.read = 0
 		ORDER BY m.date_received DESC
 	`
@@ -388,8 +386,7 @@ func (a *App) RunSearch(searchQuery string, limit int) error {
 				m.read
 			FROM messages m
 			LEFT JOIN subjects s ON m.subject = s.ROWID
-			LEFT JOIN recipients r ON r.message = m.ROWID AND r.type = 0 AND r.position = 0
-			LEFT JOIN addresses a ON r.address = a.ROWID
+			LEFT JOIN addresses a ON m.sender = a.ROWID
 			WHERE s.subject LIKE ? OR a.address LIKE ? OR a.comment LIKE ?
 			ORDER BY m.date_received DESC
 			LIMIT ?
@@ -457,8 +454,7 @@ func (a *App) RunRead(id int) error {
 			mb.url as mailbox
 		FROM messages m
 		LEFT JOIN subjects s ON m.subject = s.ROWID
-		LEFT JOIN recipients r ON r.message = m.ROWID AND r.type = 0 AND r.position = 0
-		LEFT JOIN addresses a ON r.address = a.ROWID
+		LEFT JOIN addresses a ON m.sender = a.ROWID
 		LEFT JOIN mailboxes mb ON m.mailbox = mb.ROWID
 		WHERE m.ROWID = ?
 	`, id).Scan(&dateReceived, &fromEmail, &fromName, &subject, &mailboxURL)
@@ -540,8 +536,7 @@ func (a *App) RunAttachments(id int, saveDir string) error {
 			mb.url as mailbox
 		FROM messages m
 		LEFT JOIN subjects s ON m.subject = s.ROWID
-		LEFT JOIN recipients r ON r.message = m.ROWID AND r.type = 0 AND r.position = 0
-		LEFT JOIN addresses a ON r.address = a.ROWID
+		LEFT JOIN addresses a ON m.sender = a.ROWID
 		LEFT JOIN mailboxes mb ON m.mailbox = mb.ROWID
 		WHERE m.ROWID = ?
 	`, id).Scan(&dateReceived, &fromEmail, &fromName, &subject, &mailboxURL)
